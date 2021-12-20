@@ -1,0 +1,100 @@
+---
+title: "Step II: Data Visualization"
+subtitle: "PACs and Perceptions"
+author:
+  - name: Nicholas R. Jenkins 
+    affiliation: University of California, Riverside
+    affiliation_url: https://www.ucr.edu
+abstract: |
+  This document shows all the code used to visualize the data for this project. 
+  All graphs and figures were created using RStudio running **R** version 
+  `r R.version$major`.`r R.version$minor` "`r R.version$nickname`". 
+  
+  Each step has been carefully documented and will replicate the graphs and
+  figures used in the manuscript. The code for this document can be downloaded 
+  using the button in the top right corner. For any questions about this code, 
+  please contact Nick Jenkins at 
+  [nicholas.jenkins@email.ucr.edu](mailto:nicholas.jenkins@email.ucr.edu). 
+  All data cleaning was done using RStudio running R version `r R.version$major`
+  .`r R.version$minor` "`r R.version$nickname`".
+date: "`r Sys.Date()`"
+output: 
+  html_notebook: 
+    highlight: pygments
+    theme: paper
+    toc: yes
+    code_folding: 
+    toc_float: true
+bibliography: /Users/nick/Documents/Research/References/BibTeX/biblatex.bib
+editor_options: 
+  chunk_output_type: inline
+---
+
+```{r setup, include = FALSE}
+# Clear Environment -----------------------------------------------------------
+rm(list = ls())
+
+# Load Packages ---------------------------------------------------------------
+packages <- c("tidyverse", "foreign", "stargazer", "maps", "mapdata", 
+              "maptools", "ggmap", "ggthemes", "ggpubr")
+lapply(packages, require, character.only = TRUE)
+
+# Inline Formatting -----------------------------------------------------------
+comma <- function(x) format(x, digits = 2, big.mark = ",")
+
+# Set Global Chunk Options ----------------------------------------------------
+knitr::opts_chunk$set(
+  echo = TRUE,
+  warning = FALSE,
+  message = FALSE,
+  comment = "##",
+  R.options = list(width = 70)
+)
+```
+
+# Import Data
+
+This section imports the data cleaned in the "Step I: Data Cleaning" document to begin visualizing the data. 
+
+```{r Data Import, tidy = TRUE}
+load(file = "Data/Clean Data/estimation_data.Rda")
+```
+
+
+# Plots
+
+```{r}
+ggplot(data = estimation.data %>% drop_na(vote), aes(x = vote, fill = pac_treat)) +
+  geom_bar(position = "dodge2") +
+  theme_pubr() +
+  coord_flip() +
+  scale_fill_grey() +
+  labs(title = "How likely are you to vote for a candidate who...",
+       y = "Number of Responses",
+       x = "",
+       fill = "")
+ggsave("Figures/vote_plot.pdf", last_plot(), width = 8, height = 5)
+
+ggplot(data = estimation.data %>% drop_na(donate), aes(x = donate, fill = pac_treat)) +
+  geom_bar(position = "dodge2") +
+  theme_pubr() +
+  coord_flip() +
+  scale_fill_grey() +
+  labs(title = "How likely are you to donate to a candidate who...",
+       y = "Number of Responses",
+       x = "",
+       fill = "")
+ggsave("Figures/donate_plot.pdf", last_plot(), width = 8, height = 5)
+
+ggplot(data = estimation.data %>% drop_na(trustworthy), aes(x = trustworthy, fill = pac_treat)) +
+  geom_bar(position = "dodge2") +
+  theme_pubr() +
+  coord_flip() +
+  scale_fill_grey() +
+  labs(title = "How trustworthy is a candidate who...",
+       y = "Number of Responses",
+       x = "",
+       fill = "")
+ggsave("Figures/trust_plot.pdf", last_plot(), width = 8, height = 5)
+```
+

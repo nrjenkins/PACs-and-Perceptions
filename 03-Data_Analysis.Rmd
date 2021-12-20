@@ -1,0 +1,300 @@
+---
+title: "Step III: Data Analysis"
+subtitle: "PACs and Perceptions"
+author:
+  - name: Nicholas R. Jenkins 
+    affiliation: University of California, Riverside
+    affiliation_url: https://www.ucr.edu
+abstract: |
+  This document shows all the code used to analyze the data for this project. 
+  All analyses were done using RStudio running **R** version 
+  `r R.version$major`.`r R.version$minor` "`r R.version$nickname`". 
+  
+  Each step has been carefully documented and will replicate the results in the 
+  manuscript. The code for this document can be downloaded using the button 
+  in the top right corner. For any questions about this code, please contact 
+  Nick Jenkins at 
+  [nicholas.jenkins@email.ucr.edu](mailto:nicholas.jenkins@email.ucr.edu).
+date: "`r Sys.Date()`"
+output: 
+  html_notebook: 
+    highlight: pygments
+    theme: paper
+    toc: yes
+    code_folding: 
+    toc_float: true
+bibliography: /Users/nick/Documents/Research/References/BibTeX/biblatex.bib
+editor_options: 
+  chunk_output_type: inline
+---
+
+```{r setup, include = FALSE}
+# Clear Environment -----------------------------------------------------------
+rm(list = ls())
+
+# Load Packages ---------------------------------------------------------------
+packages <- c("tidyverse", "foreign", "stargazer", "rstan", "brms", "sjPlot",
+              "sjstats", "rstanarm", "MASS")
+lapply(packages, require, character.only = TRUE)
+
+# Functions -------------------------------------------------------------------
+# Inline Formatting
+comma <- function(x) format(x, digits = 2, big.mark = ",")
+
+# Inverse Hyperbolic Sin Transformation Function
+ihs <- function(x) {
+    y <- log(x + sqrt(x ^ 2 + 1))
+    return(y)
+}
+
+# Set Global Chunk Options ----------------------------------------------------
+knitr::opts_chunk$set(
+  echo = TRUE,
+  warning = FALSE,
+  message = FALSE,
+  comment = "##",
+  R.options = list(width = 70)
+)
+```
+
+
+# Import Data
+
+This section imports the data cleaned in the "Step I: Data Cleaning" document to begin analyzing the data. 
+
+```{r Data Import}
+load(file = "Data/Clean Data/estimation_data.Rda")
+
+estimation.data <- 
+  estimation.data %>%
+  mutate(pac_treat = relevel(pac_treat, ref = "Accepts PAC Contributions"),
+         vote.num = as.numeric(vote),
+         donate.num = as.numeric(donate),
+         trust.num = as.numeric(trustworthy))
+```
+
+
+# Model Fitting
+
+```{r Modelling}
+# Likelihood of Voting for Candidate ------------------------------------------
+vote.fit.1 <- brm(vote.num ~ pac_treat + experience + race,
+                  family = cumulative(link = "logit"),
+                  prior = c(prior(normal(0, 4), class = "Intercept"),
+                            prior(normal(0, 4), class = "b")),
+                  sample_prior = TRUE,
+                  data = estimation.data)
+print(vote.fit.1)
+
+# Likelihood of Donating to Candidate -----------------------------------------
+donate.fit.1 <- brm(donate.num ~ pac_treat + experience + race,
+                  family = cumulative(link = "logit"),
+                  prior = c(prior(normal(0, 4), class = "Intercept"),
+                            prior(normal(0, 4), class = "b")),
+                  sample_prior = TRUE,
+                  data = estimation.data)
+print(donate.fit.1)
+
+
+# Likelihood of Rating Candidate as Trustworthy -------------------------------
+trust.fit.1 <- brm(trust.num ~ pac_treat + experience + race,
+                  family = cumulative(link = "logit"),
+                  prior = c(prior(normal(0, 4), class = "Intercept"),
+                            prior(normal(0, 4), class = "b")),
+                  sample_prior = TRUE,
+                  data = estimation.data)
+print(trust.fit.1)
+```
+
+
+# Convergence Diagnostics
+
+```{r}
+# Likelihood of Voting for Candidate ------------------------------------------
+vote.rhat <- rhat(vote.fit.1)
+mcmc_rhat(vote.rhat)
+
+# Likelihood of Donating to Candidate -----------------------------------------
+donate.rhat <- rhat(donate.fit.1)
+mcmc_rhat(donate.rhat)
+
+# Likelihood of Rating Candidate as Trustworthy -------------------------------
+trust.rhat <- rhat(trust.fit.1)
+mcmc_rhat(trust.rhat)
+```
+
+
+# Prior Analysis
+
+```{r}
+vote.prior <- prior_samples(vote.fit.1)
+
+ggplot(data = vote.prior) +
+  geom_density(aes(x = Intercept)) +
+  geom_density(aes(x = b))
+```
+
+
+# Results Visualizations
+
+```{r}
+# Likelihood of Voting for Candidate ------------------------------------------
+vote.plot <- conditional_effects(vote.fit.1, effects = "pac_treat", 
+                                 categorical = TRUE)
+
+plot(vote.plot, plot = FALSE)[[1]] + 
+  scale_fill_colorblind(name = "Vote for Candidate?",
+                        labels = c("Very Unlikely", "Unlikely", 
+                                "Slightly Unlikely", 
+                                "Neither Unlikely nor Likely",
+                                "Slightly Likely", "Likely", "Very Likely")) +
+  scale_color_colorblind(name = "Vote for Candidate?",
+                         labels = c("Very Unlikely", "Unlikely", 
+                                "Slightly Unlikely", 
+                                "Neither Unlikely nor Likely",
+                                "Slightly Likely", "Likely", "Very Likely")) +
+  xlab("") +
+  ylab("Predicted Probability") +
+  theme_pubr()
+ggsave("Figures/vote_results.pdf", last_plot(), width = 8, height = 5)
+
+vote.post <- posterior_samples(vote.fit.1)
+
+vote.post %>%
+  ggplot(aes(x = b_pac_treatDoesNotAcceptPACContributions)) +
+  geom_halfeyeh(point_interval = median_hdi, .width = 0.95) +
+  geom_vline(aes(xintercept = 0), linetype = "dashed", color = "grey55") +
+  ylab("") +
+  xlab("Candidate Rejects PAC Contributions (Log-odds)") +
+  theme_pubr() +
+  theme(axis.title.y = element_blank(),
+        axis.text.y = element_blank(),
+        axis.ticks.y = element_blank())
+
+# Likelihood of Donating to Candidate -----------------------------------------
+donate.plot <- conditional_effects(donate.fit.1, effects = "pac_treat", 
+                                   categorical = TRUE)
+
+plot(donate.plot, plot = FALSE)[[1]] + 
+  scale_fill_colorblind(name = "Donate to Candidate?",
+                        labels = c("Very Unlikely", "Unlikely", 
+                                "Slightly Unlikely", 
+                                "Neither Unlikely nor Likely",
+                                "Slightly Likely", "Likely", "Very Likely")) +
+  scale_color_colorblind(name = "Donate to Candidate?",
+                         labels = c("Very Unlikely", "Unlikely", 
+                                "Slightly Unlikely", 
+                                "Neither Unlikely nor Likely",
+                                "Slightly Likely", "Likely", "Very Likely")) +
+  xlab("") +
+  ylab("Predicted Probability") +
+  theme_pubr()
+ggsave("Figures/donate_results.pdf", last_plot(), width = 8, height = 5)
+
+donate.post <- posterior_samples(donate.fit.1)
+
+donate.post %>%
+  ggplot(aes(x = b_pac_treatDoesNotAcceptPACContributions)) +
+  geom_halfeyeh(point_interval = median_hdi, .width = 0.95) +
+  geom_vline(aes(xintercept = 0), linetype = "dashed", color = "grey55") +
+  ylab("") +
+  xlab("Candidate Rejects PAC Contributions (Log-odds)") +
+  theme_pubr() +
+  theme(axis.title.y = element_blank(),
+        axis.text.y = element_blank(),
+        axis.ticks.y = element_blank())
+
+# Likelihood of Rating Candidate as Trustworthy -------------------------------
+trust.plot <- conditional_effects(trust.fit.1, effects = "pac_treat", 
+                                   categorical = TRUE)
+
+plot(trust.plot, plot = FALSE)[[1]] + 
+  scale_fill_colorblind(name = "Trust the Candidate?",
+                        labels = c("Very Unlikely", "Unlikely", 
+                                "Slightly Unlikely", 
+                                "Neither Unlikely nor Likely",
+                                "Slightly Likely", "Likely", "Very Likely")) +
+  scale_color_colorblind(name = "Trust the Candidate?",
+                         labels = c("Very Unlikely", "Unlikely", 
+                                "Slightly Unlikely", 
+                                "Neither Unlikely nor Likely",
+                                "Slightly Likely", "Likely", "Very Likely")) +
+  xlab("") +
+  ylab("Predicted Probability") +
+  theme_pubr()
+ggsave("Figures/trust_results.pdf", last_plot(), width = 8, height = 5)
+
+trust.post <- posterior_samples(trust.fit.1)
+
+trust.post %>%
+  ggplot(aes(x = b_pac_treatDoesNotAcceptPACContributions)) +
+  geom_halfeyeh(point_interval = median_hdi, .width = 0.95) +
+  geom_vline(aes(xintercept = 0), linetype = "dashed", color = "grey55") +
+  ylab("") +
+  xlab("Candidate Rejects PAC Contributions (Log-odds)") +
+  theme_pubr() +
+  theme(axis.title.y = element_blank(),
+        axis.text.y = element_blank(),
+        axis.ticks.y = element_blank())
+
+# All Models ------------------------------------------------------------------
+models <- 
+  bind_rows(vote.post, donate.post, trust.post, .id = "id") %>%
+  mutate(model = factor(id, levels = c(1, 2, 3), 
+                        labels = c("Vote Model", "Donate Model", "Trust Model")))
+
+models %>%
+  mutate(pac_treat = exp(b_pac_treatDoesNotAcceptPACContributions)) %>%
+  ggplot() +
+  stat_halfeye(aes(y = fct_reorder(model, pac_treat),
+                    x = pac_treat),
+                .width = c(0.89, 0.5), 
+                point_interval = median_hdi,
+                fill = "#0072B2",
+                color = "black",
+                alpha = 0.9) +
+  geom_vline(aes(xintercept = 1), linetype = "dashed", color = "grey55") +
+  scale_x_continuous(breaks = pretty_breaks(n = 6)) +
+  labs(x = "Candidate Rejects PAC Contributions (Odds Ratios)", 
+       y = "") +
+  theme_pubr()
+ggsave("Figures/all_results.pdf", last_plot(), width = 8, height = 5)
+```
+
+
+# Posterior Predictive Checks
+
+```{r}
+# Likelihood of Voting for Candidate ------------------------------------------
+pp_check(vote.fit.1, type = "hist", nsamples = 10, binwidth = 1)
+pp_check(vote.fit.1, type = "ecdf_overlay", nsamples = 50)
+
+# Likelihood of Donating to Candidate -----------------------------------------
+pp_check(donate.fit.1, type = "hist", nsamples = 10, binwidth = 1)
+pp_check(donate.fit.1, type = "ecdf_overlay", nsamples = 50)
+
+# Likelihood of Rating Candidate as Trustworthy -------------------------------
+pp_check(trust.fit.1, type = "hist", nsamples = 10, binwidth = 1)
+pp_check(trust.fit.1, type = "ecdf_overlay", nsamples = 50)
+```
+
+
+## Results Table
+
+```{r}
+tab_model(vote.fit.01, vote.fit.02, donate.fit.01, donate.fit.02, trust.fit.01,
+          trust.fit.02,
+          dv.labels = c("Voting for Candidate", "Voting for Candidate",
+                        "Donate to Candidate", "Donate to Candidate",
+                        "Trust Candidate", "Trust Candidate"),
+          pred.labels = c("Intercept",
+                          "Accepts PAC Contributions", 
+                          "Experience: Councilmember",
+                          "Experience: Mayor", "Mexican American Candidate",
+                          "Salvadorian American Candidate", 
+                          "Chineese American Candidate", 
+                          "Vietnamese American Candidate",
+                          "Cutpoint 1", "Cutpoint 2", "Cutpoint 3", 
+                          "Cutpoint 4", "Cutpoint 5", "Cutpoint 6"),
+          file = "E:/PAC Perceptions/results.html")
+```
